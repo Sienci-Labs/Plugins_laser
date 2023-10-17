@@ -1,4 +1,7 @@
-## Laser related plugins
+## Laser related plugins for SLB
+
+### Switch PWM
+Under development. Adds functions to switch active PWM output.
 
 ### Laser PPI
 
