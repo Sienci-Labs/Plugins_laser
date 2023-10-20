@@ -47,6 +47,7 @@ spindle select.*/
 static on_report_options_ptr on_report_options;
 static spindle_state_t laser_state;
 static spindle_id_t laser_id = -1;
+static uint8_t n_spindle = 0;
 
 static bool pwmEnabled = false;
 static spindle_pwm_t laser_pwm;
@@ -98,10 +99,6 @@ static uint_fast16_t laserGetPWM (float rpm){
 // Start or stop laser
 static void laserSetStateVariable (spindle_state_t state, float rpm)
 {
-#ifdef LASER_DIRECTION_PIN
-    if(state.on)
-        laser_dir(state.ccw);
-#endif
     if(!settings.spindle.flags.enable_rpm_controlled) {
         if(state.on)
             laser_on();
@@ -111,16 +108,7 @@ static void laserSetStateVariable (spindle_state_t state, float rpm)
 
     laser_set_speed(state.on ? spindle_compute_pwm_value(&laser_pwm, rpm, false) : laser_pwm.off_value);
 
-#if LASER_SYNC_ENABLE
-    if(settings.laser.at_speed_tolerance > 0.0f) {
-        float tolerance = rpm * settings.laser.at_speed_tolerance / 100.0f;
-        laser_data.rpm_low_limit = rpm - tolerance;
-        laser_data.rpm_high_limit = rpm + tolerance;
-    }
-    laser_data.state_programmed.on = state.on;
-    laser_data.state_programmed.ccw = state.ccw;
-    laser_data.rpm_programmed = laser_data.rpm = rpm;
-#endif
+
 }
 
 static bool laserConfig (spindle_ptrs_t *laser){
@@ -188,7 +176,6 @@ static bool laserConfig (spindle_ptrs_t *laser){
 
     spindle_update_caps(laser, laser->cap.variable ? &laser_pwm : NULL);
 
-
     return true;
 }
 
@@ -216,21 +203,21 @@ static void laser_set_speed (uint_fast16_t pwm_value){
 #if LASER_PWM_TIMER_N == 1
             LASER_PWM_TIMER->BDTR |= TIM_BDTR_MOE;
 #endif
-            SPINDLE_PWM_TIMER_CCR = pwm_value;
+            LASER_PWM_TIMER_CCR = pwm_value;
         } else
 #if LASER_PWM_TIMER_N == 1
-            SPINDLE_PWM_TIMER->BDTR &= ~TIM_BDTR_MOE; // Set PWM output low
+            LASER_PWM_TIMER->BDTR &= ~TIM_BDTR_MOE; // Set PWM output low
 #else
-            SPINDLE_PWM_TIMER_CCR = 0;
+            LASER_PWM_TIMER_CCR = 0;
 #endif
     } else {
         if(!pwmEnabled) {
             laser_on();
             pwmEnabled = true;
         }
-        SPINDLE_PWM_TIMER_CCR = pwm_value;
+        LASER_PWM_TIMER_CCR = pwm_value;
 #if LASER_PWM_TIMER_N == 1
-        SPINDLE_PWM_TIMER->BDTR |= TIM_BDTR_MOE;
+        LASER_PWM_TIMER->BDTR |= TIM_BDTR_MOE;
 #endif
     }    
 }
@@ -253,7 +240,7 @@ void pwm_switch_init (void)
     //initialize and register the laser PWM spindle.
 
     static const spindle_ptrs_t laser = {
- #ifdef SPINDLE_PWM_TIMER_N
+ #ifdef LASER_PWM_TIMER_N
         .type = SpindleType_PWM,
         .cap.variable = On,
         .cap.laser = On,
@@ -266,9 +253,6 @@ void pwm_switch_init (void)
   #endif
  #else
         .type = SpindleType_Basic,
- #endif
- #ifdef SPINDLE_DIRECTION_PIN
-        .cap.direction = On,
  #endif
         .set_state = laserSetState,
         .get_state = laserGetState
