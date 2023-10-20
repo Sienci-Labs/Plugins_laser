@@ -58,14 +58,14 @@ static void laser_set_speed (uint_fast16_t pwm_value);
 inline static void laser_off (void)
 {
 #ifdef LASER_ENABLE_PIN
-    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, 1);
+    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, 0);
 #endif
 }
 
 inline static void laser_on (void)
 {
 #ifdef LASER_ENABLE_PIN
-    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, 0);
+    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, 1);
 #endif
 }
 
