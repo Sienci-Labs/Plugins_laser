@@ -45,16 +45,85 @@ spindle select.*/
 #endif
 
 static on_report_options_ptr on_report_options;
+static on_spindle_selected_ptr on_spindle_selected;
 static spindle_state_t laser_state;
 static spindle_id_t laser_id = -1;
-static uint8_t n_spindle = 0;
+static spindle_ptrs_t *spindle_hal = NULL;
 
 static bool pwmEnabled = false;
 static spindle_pwm_t laser_pwm;
 static void laser_set_speed (uint_fast16_t pwm_value);
 
-// Static spindle (off, on cw & on ccw)
+typedef struct {
+    float rpm_max;
+    float rpm_min;
+    float pwm_freq;
+    float pwm_off_value;
+    float pwm_min_value;
+    float pwm_max_value;
+} laser_settings_t;
 
+laser_settings_t laser_pwm_settings;
+static nvs_address_t nvs_address;
+
+static const setting_detail_t laser_settings[] = {
+     { Setting_Laser_RpmMax, Group_Spindle, "Maximum laser speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.rpm_max, NULL, NULL },
+     { Setting_Laser_RpmMin, Group_Spindle, "Minimum laser speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.rpm_min, NULL, NULL },
+     { Setting_Laser_PWMFreq, Group_Spindle, "Laser PWM frequency", "Hz", Format_Decimal, "#####0", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.pwm_freq, NULL, NULL },
+     { Setting_Laser_PWMOffValue, Group_Spindle, "Laser PWM off value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_off_value, NULL, NULL },
+     { Setting_Laser_PWMMinValue, Group_Spindle, "Laser PWM min value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_min_value, NULL, NULL },
+     { Setting_Laser_PWMMaxValue, Group_Spindle, "Laser PWM max value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_max_value, NULL, NULL },
+     
+};
+
+static const setting_descr_t laser_settings_descr[] = {
+    { Setting_Laser_RpmMax, "Maximum S word speed for laser" },
+    { Setting_Laser_RpmMin, "Minimum S word speed for laser" },
+    { Setting_Laser_PWMFreq, "Laser PWM frequency" },
+    { Setting_Laser_PWMOffValue, "Laser PWM off value in percent (duty cycle)." },    
+    { Setting_Laser_PWMMinValue, "Laser PWM min value in percent (duty cycle)." },
+    { Setting_Laser_PWMMaxValue, "Laser PWM max value in percent (duty cycle)." },    
+};
+
+// Write settings to non volatile storage (NVS).
+static void laser_settings_save (void)
+{
+    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&laser_pwm_settings, sizeof(laser_pwm_settings), true);
+}
+
+// Restore default settings and write to non volatile storage (NVS).
+static void laser_settings_restore (void)
+{
+    laser_pwm_settings.pwm_freq = 449;
+    laser_pwm_settings.pwm_max_value = 100;
+    laser_pwm_settings.pwm_min_value = 0;
+    laser_pwm_settings.pwm_off_value = 0;
+    laser_pwm_settings.rpm_max = 255;
+    laser_pwm_settings.rpm_min = 0;
+    
+    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&laser_pwm_settings, sizeof(laser_pwm_settings), true);
+}
+
+// Load our settings from non volatile storage (NVS).
+// If load fails restore to default values.
+static void laser_settings_load (void)
+{
+    if(hal.nvs.memcpy_from_nvs((uint8_t *)&laser_pwm_settings, nvs_address, sizeof(laser_pwm_settings), true) != NVS_TransferResult_OK)
+        laser_settings_restore();
+}
+
+static setting_details_t laser_details = {
+    .settings = laser_settings,
+    .n_settings = sizeof(laser_settings) / sizeof(setting_detail_t),
+#ifndef NO_SETTINGS_DESCRIPTIONS
+    .descriptions = laser_settings_descr,
+    .n_descriptions = sizeof(laser_settings_descr) / sizeof(setting_descr_t),
+#endif
+    .save = laser_settings_save,
+    .load = laser_settings_load,
+    .restore = laser_settings_restore
+};
+// Static spindle (off, on cw & on ccw)
 inline static void laser_off (void)
 {
 #ifdef LASER_ENABLE_PIN
@@ -96,6 +165,28 @@ static uint_fast16_t laserGetPWM (float rpm){
     return spindle_compute_pwm_value(&laser_pwm, rpm, false);
 }
 
+static inline uint_fast16_t invert_pwm (spindle_pwm_t *pwm_data, uint_fast16_t pwm_value)
+{
+    return pwm_data->invert_pwm ? pwm_data->period - pwm_value - 1 : pwm_value;
+}
+
+static bool laser_precompute_pwm_values (spindle_ptrs_t *spindle, spindle_pwm_t *pwm_data, uint32_t clock_hz)
+{
+    if(spindle->rpm_max > spindle->rpm_min) {
+        pwm_data->rpm_min = spindle->rpm_min;
+        pwm_data->period = (uint_fast16_t)((float)clock_hz / laser_pwm_settings.pwm_freq);
+        if(laser_pwm_settings.pwm_off_value == 0.0f)
+            pwm_data->off_value = pwm_data->invert_pwm ? pwm_data->period : 0;
+        else
+            pwm_data->off_value = invert_pwm(pwm_data, (uint_fast16_t)(pwm_data->period * laser_pwm_settings.pwm_off_value / 100.0f));
+        pwm_data->min_value = (uint_fast16_t)(pwm_data->period * laser_pwm_settings.pwm_min_value / 100.0f);
+        pwm_data->max_value = (uint_fast16_t)(pwm_data->period * laser_pwm_settings.pwm_max_value / 100.0f) + pwm_data->offset;
+        pwm_data->pwm_gradient = (float)(pwm_data->max_value - pwm_data->min_value) / (spindle->rpm_max - spindle->rpm_min);
+        pwm_data->always_on = laser_pwm_settings.pwm_off_value != 0.0f;
+    }
+    return spindle->rpm_max > spindle->rpm_min;
+}
+
 // Start or stop laser
 static void laserSetStateVariable (spindle_state_t state, float rpm)
 {
@@ -122,17 +213,17 @@ static bool laserConfig (spindle_ptrs_t *laser){
     HAL_RCC_GetClockConfig(&clock, &latency);
 
 #if LASER_PWM_TIMER_N == 1
-    if((laser->cap.variable = !settings.spindle.flags.pwm_disable && spindle_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK2Freq() * TIMER_CLOCK_MUL(clock.APB2CLKDivider)) / prescaler))) {
+    if((laser->cap.variable = !settings.spindle.flags.pwm_disable && laser_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK2Freq() * TIMER_CLOCK_MUL(clock.APB2CLKDivider)) / prescaler))) {
 #else
-    if((laser->cap.variable = !settings.spindle.flags.pwm_disable && spindle_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK1Freq() * TIMER_CLOCK_MUL(clock.APB1CLKDivider)) / prescaler))) {
+    if((laser->cap.variable = !settings.spindle.flags.pwm_disable && laser_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK1Freq() * TIMER_CLOCK_MUL(clock.APB1CLKDivider)) / prescaler))) {
 #endif
 
         while(laser_pwm.period > 65534) {
             prescaler++;
 #if LASER_PWM_TIMER_N == 1
-            spindle_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK2Freq() * TIMER_CLOCK_MUL(clock.APB2CLKDivider)) / prescaler);
+            laser_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK2Freq() * TIMER_CLOCK_MUL(clock.APB2CLKDivider)) / prescaler);
 #else
-            spindle_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK1Freq() * TIMER_CLOCK_MUL(clock.APB1CLKDivider)) / prescaler);
+            laser_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK1Freq() * TIMER_CLOCK_MUL(clock.APB1CLKDivider)) / prescaler);
 #endif
         }
 
@@ -235,14 +326,46 @@ static void warning_msg (uint_fast16_t state)
     report_message("Laser PWM switch plugin failed to initialize!", Message_Warning);
 }
 
+static void onSpindleSelected (spindle_ptrs_t *spindle)
+{
+    if(spindle->id == laser_id) {
+
+        spindle_hal = spindle;
+        //spindle_hal->type = SpindleType_PWM;
+        //spindle_hal->cap.variable = On;
+        //spindle_hal->cap.variable = On;
+        //spindle_hal->cap.pwm_invert = On;
+        //spindle_hal->cap.rpm_range_locked = On;
+        spindle_hal->rpm_max = laser_pwm_settings.rpm_max;
+        spindle_hal->rpm_min = laser_pwm_settings.rpm_min;
+        //spindle_hal->config = laserConfig;
+        //spindle_hal->get_pwm = laserGetPWM;
+        //spindle_hal->update_pwm = laser_set_speed;
+        //spindle_hal->set_state = laserSetState;
+        //spindle_hal->get_state = laserGetState;
+
+    } else
+        spindle_hal = NULL;
+
+    if(on_spindle_selected)
+        on_spindle_selected(spindle);
+}
+
 void pwm_switch_init (void)
 {
     //initialize and register the laser PWM spindle.
+
+    if((nvs_address = nvs_alloc(sizeof(laser_pwm_settings)))) {
+
+        settings_register(&laser_details);
+        //laser_settings_load();
+    }  
 
     static const spindle_ptrs_t laser = {
  #ifdef LASER_PWM_TIMER_N
         .type = SpindleType_PWM,
         .cap.variable = On,
+        .cap.rpm_range_locked = On,
         .cap.laser = On,
         .cap.pwm_invert = On,
         .config = laserConfig,
@@ -264,6 +387,9 @@ void pwm_switch_init (void)
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = report_options;
+
+        on_spindle_selected = grbl.on_spindle_selected;
+        grbl.on_spindle_selected = onSpindleSelected;        
 
     } else
         protocol_enqueue_rt_command(warning_msg);
