@@ -212,6 +212,12 @@ static bool laserConfig (spindle_ptrs_t *laser){
 
     HAL_RCC_GetClockConfig(&clock, &latency);
 
+    //spindle_hal = laser;
+
+    laser->rpm_max = laser_pwm_settings.rpm_max;
+    laser->rpm_min = laser_pwm_settings.rpm_min;
+    laser->pwm_off_value = laser_pwm_settings.pwm_off_value;
+
 #if LASER_PWM_TIMER_N == 1
     if((laser->cap.variable = !settings.spindle.flags.pwm_disable && laser_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK2Freq() * TIMER_CLOCK_MUL(clock.APB2CLKDivider)) / prescaler))) {
 #else
@@ -388,8 +394,8 @@ void pwm_switch_init (void)
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = report_options;
 
-        on_spindle_selected = grbl.on_spindle_selected;
-        grbl.on_spindle_selected = onSpindleSelected;        
+        //on_spindle_selected = grbl.on_spindle_selected;
+        //grbl.on_spindle_selected = onSpindleSelected;        
 
     } else
         protocol_enqueue_rt_command(warning_msg);
