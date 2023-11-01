@@ -61,6 +61,8 @@ typedef struct {
     float pwm_off_value;
     float pwm_min_value;
     float pwm_max_value;
+    float laser_x_offset;
+    float laser_y_offset;
 } laser_settings_t;
 
 laser_settings_t laser_pwm_settings;
@@ -73,7 +75,8 @@ static const setting_detail_t laser_settings[] = {
      { Setting_Laser_PWMOffValue, Group_Spindle, "Laser PWM off value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_off_value, NULL, NULL },
      { Setting_Laser_PWMMinValue, Group_Spindle, "Laser PWM min value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_min_value, NULL, NULL },
      { Setting_Laser_PWMMaxValue, Group_Spindle, "Laser PWM max value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_max_value, NULL, NULL },
-     
+     { Setting_Laser_XOffset, Group_Spindle, "Laser X Offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_x_offset, NULL, NULL },
+     { Setting_Laser_YOffset, Group_Spindle, "Laser Y Offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_y_offset, NULL, NULL },     
 };
 
 static const setting_descr_t laser_settings_descr[] = {
@@ -82,7 +85,9 @@ static const setting_descr_t laser_settings_descr[] = {
     { Setting_Laser_PWMFreq, "Laser PWM frequency" },
     { Setting_Laser_PWMOffValue, "Laser PWM off value in percent (duty cycle)." },    
     { Setting_Laser_PWMMinValue, "Laser PWM min value in percent (duty cycle)." },
-    { Setting_Laser_PWMMaxValue, "Laser PWM max value in percent (duty cycle)." },    
+    { Setting_Laser_PWMMaxValue, "Laser PWM max value in percent (duty cycle)." }, 
+    { Setting_Laser_XOffset, "Laser offset from spindle on X axis." },
+    { Setting_Laser_YOffset, "Laser offset from spindle on X axis." },        
 };
 
 // Write settings to non volatile storage (NVS).
@@ -211,8 +216,6 @@ static bool laserConfig (spindle_ptrs_t *laser){
     uint32_t latency, prescaler = 1;
 
     HAL_RCC_GetClockConfig(&clock, &latency);
-
-    //spindle_hal = laser;
 
     laser->rpm_max = laser_pwm_settings.rpm_max;
     laser->rpm_min = laser_pwm_settings.rpm_min;
