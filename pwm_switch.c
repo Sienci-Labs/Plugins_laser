@@ -220,6 +220,7 @@ static bool laserConfig (spindle_ptrs_t *laser){
     laser->rpm_max = laser_pwm_settings.rpm_max;
     laser->rpm_min = laser_pwm_settings.rpm_min;
     laser->pwm_off_value = laser_pwm_settings.pwm_off_value;
+    laser->cap.laser = On;
 
 #if LASER_PWM_TIMER_N == 1
     if((laser->cap.variable = !settings.spindle.flags.pwm_disable && laser_precompute_pwm_values(laser, &laser_pwm, (HAL_RCC_GetPCLK2Freq() * TIMER_CLOCK_MUL(clock.APB2CLKDivider)) / prescaler))) {
@@ -335,31 +336,6 @@ static void warning_msg (uint_fast16_t state)
     report_message("Laser PWM switch plugin failed to initialize!", Message_Warning);
 }
 
-static void onSpindleSelected (spindle_ptrs_t *spindle)
-{
-    if(spindle->id == laser_id) {
-
-        spindle_hal = spindle;
-        //spindle_hal->type = SpindleType_PWM;
-        //spindle_hal->cap.variable = On;
-        //spindle_hal->cap.variable = On;
-        //spindle_hal->cap.pwm_invert = On;
-        //spindle_hal->cap.rpm_range_locked = On;
-        spindle_hal->rpm_max = laser_pwm_settings.rpm_max;
-        spindle_hal->rpm_min = laser_pwm_settings.rpm_min;
-        //spindle_hal->config = laserConfig;
-        //spindle_hal->get_pwm = laserGetPWM;
-        //spindle_hal->update_pwm = laser_set_speed;
-        //spindle_hal->set_state = laserSetState;
-        //spindle_hal->get_state = laserGetState;
-
-    } else
-        spindle_hal = NULL;
-
-    if(on_spindle_selected)
-        on_spindle_selected(spindle);
-}
-
 void pwm_switch_init (void)
 {
     //initialize and register the laser PWM spindle.
@@ -395,10 +371,7 @@ void pwm_switch_init (void)
     if(laser_id) {
 
         on_report_options = grbl.on_report_options;
-        grbl.on_report_options = report_options;
-
-        //on_spindle_selected = grbl.on_spindle_selected;
-        //grbl.on_spindle_selected = onSpindleSelected;        
+        grbl.on_report_options = report_options;    
 
     } else
         protocol_enqueue_rt_command(warning_msg);
