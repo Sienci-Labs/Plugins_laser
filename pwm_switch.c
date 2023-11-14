@@ -353,6 +353,7 @@ void pwm_switch_init (void)
         .cap.rpm_range_locked = On,
         .cap.laser = On,
         .cap.pwm_invert = On,
+        .cap.direction = On,
         .config = laserConfig,
         .get_pwm = laserGetPWM,
         .update_pwm = laser_set_speed,
