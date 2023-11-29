@@ -48,8 +48,10 @@ static on_report_options_ptr on_report_options;
 static settings_changed_ptr settings_changed;
 static on_spindle_selected_ptr on_spindle_selected;
 static spindle_state_t laser_state;
+static spindle_data_t spindle_data = {0};
 static spindle_id_t laser_id = -1;
 static spindle_ptrs_t *spindle_hal = NULL;
+static spindle_get_data_ptr on_get_data = NULL;
 
 static bool pwmEnabled = false;
 static spindle_pwm_t laser_pwm;
