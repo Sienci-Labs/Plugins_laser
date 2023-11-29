@@ -45,6 +45,7 @@ spindle select.*/
 #endif
 
 static on_report_options_ptr on_report_options;
+static settings_changed_ptr settings_changed;
 static on_spindle_selected_ptr on_spindle_selected;
 static spindle_state_t laser_state;
 static spindle_id_t laser_id = -1;
@@ -207,7 +208,7 @@ static void laserSetStateVariable (spindle_state_t state, float rpm)
 
 }
 
-static bool laserConfig (spindle_ptrs_t *laser){
+static bool laserConfig (spindle_ptrs_t *laser)
 {
     if(laser == NULL)
         return false;
@@ -292,7 +293,7 @@ static void laserPulseOn (uint_fast16_t pulse_length)
 
 #endif
  
-}
+
 
 static void laser_set_speed (uint_fast16_t pwm_value){
     if (pwm_value == laser_pwm.off_value) {
@@ -321,6 +322,12 @@ static void laser_set_speed (uint_fast16_t pwm_value){
         LASER_PWM_TIMER->BDTR |= TIM_BDTR_MOE;
 #endif
     }    
+}
+
+static void on_settings_changed (settings_t *settings, settings_changed_flags_t changed)
+{
+    settings_changed(settings, changed);
+    laserConfig(spindle_get_hal(laser_id, SpindleHAL_Configured));
 }
 
 static void report_options (bool newopt)
@@ -372,7 +379,10 @@ void pwm_switch_init (void)
     if(laser_id) {
 
         on_report_options = grbl.on_report_options;
-        grbl.on_report_options = report_options;    
+        grbl.on_report_options = report_options;
+
+        settings_changed = hal.settings_changed;
+        hal.settings_changed = on_settings_changed;         
 
     } else
         protocol_enqueue_rt_command(warning_msg);
