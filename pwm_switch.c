@@ -57,6 +57,17 @@ static bool pwmEnabled = false;
 static spindle_pwm_t laser_pwm;
 static void laser_set_speed (uint_fast16_t pwm_value);
 
+typedef union {
+    uint8_t value;
+    struct {
+        uint8_t
+
+        enable      :1,
+        pwm         :1,      
+        reserved    :6;
+    };
+} laser_invert_flags_t;
+
 typedef struct {
     float rpm_max;
     float rpm_min;
@@ -66,6 +77,7 @@ typedef struct {
     float pwm_max_value;
     float laser_x_offset;
     float laser_y_offset;
+    laser_invert_flags_t invert_flags;  
 } laser_settings_t;
 
 laser_settings_t laser_pwm_settings;
@@ -79,7 +91,8 @@ static const setting_detail_t laser_settings[] = {
      { Setting_Laser_PWMMinValue, Group_Spindle, "Laser PWM min value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_min_value, NULL, NULL },
      { Setting_Laser_PWMMaxValue, Group_Spindle, "Laser PWM max value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_max_value, NULL, NULL },
      { Setting_Laser_XOffset, Group_Spindle, "Laser X Offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_x_offset, NULL, NULL },
-     { Setting_Laser_YOffset, Group_Spindle, "Laser Y Offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_y_offset, NULL, NULL },     
+     { Setting_Laser_YOffset, Group_Spindle, "Laser Y Offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_y_offset, NULL, NULL },
+     { Setting_LaserInvertMask, Group_Spindle, "Invert laser signals", NULL, Format_Bitfield, "Laser enable,Laser PWM", NULL, NULL, Setting_NonCore, &laser_pwm_settings.invert_flags, NULL, NULL, { .reboot_required = On } },          
 };
 
 static const setting_descr_t laser_settings_descr[] = {
@@ -90,7 +103,8 @@ static const setting_descr_t laser_settings_descr[] = {
     { Setting_Laser_PWMMinValue, "Laser PWM min value in percent (duty cycle)." },
     { Setting_Laser_PWMMaxValue, "Laser PWM max value in percent (duty cycle)." }, 
     { Setting_Laser_XOffset, "Laser offset from spindle on X axis." },
-    { Setting_Laser_YOffset, "Laser offset from spindle on X axis." },        
+    { Setting_Laser_YOffset, "Laser offset from spindle on X axis." }, 
+    { Setting_LaserInvertMask, "Inverts the laser enable and PWM signals (active low)." },        
 };
 
 // Write settings to non volatile storage (NVS).
@@ -108,6 +122,10 @@ static void laser_settings_restore (void)
     laser_pwm_settings.pwm_off_value = 0;
     laser_pwm_settings.rpm_max = 255;
     laser_pwm_settings.rpm_min = 0;
+    laser_pwm_settings.invert_flags.value = 0;
+    laser_pwm_settings.laser_x_offset = 0;
+    laser_pwm_settings.laser_y_offset = 0;
+
     
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&laser_pwm_settings, sizeof(laser_pwm_settings), true);
 }
@@ -135,14 +153,14 @@ static setting_details_t laser_details = {
 inline static void laser_off (void)
 {
 #ifdef LASER_ENABLE_PIN
-    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, 0);
+    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, Off ^ laser_pwm_settings.invert_flags.enable);
 #endif
 }
 
 inline static void laser_on (void)
 {
 #ifdef LASER_ENABLE_PIN
-    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, 1);
+    DIGITAL_OUT(LASER_ENABLE_PORT, LASER_ENABLE_PIN, On ^ laser_pwm_settings.invert_flags.enable);
 #endif
 }
 
@@ -261,7 +279,7 @@ static bool laserConfig (spindle_ptrs_t *laser)
 #if LASER_PWM_TIMER_N == 1
         LASER_PWM_TIMER->BDTR |= TIM_BDTR_OSSR|TIM_BDTR_OSSI;
 #endif
-        if(settings.spindle.invert.pwm) {
+        if(laser_pwm_settings.invert_flags.pwm) {
             LASER_PWM_TIMER->CCER |= LASER_PWM_CCER_POL;
             LASER_PWM_TIMER->CR2 |= LASER_PWM_CR2_OIS;
         } else {
