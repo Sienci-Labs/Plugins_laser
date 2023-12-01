@@ -46,15 +46,17 @@ spindle select.*/
 
 static on_report_options_ptr on_report_options;
 static settings_changed_ptr settings_changed;
+static on_spindle_select_ptr on_spindle_select;
 static on_spindle_selected_ptr on_spindle_selected;
 static spindle_state_t laser_state;
-static spindle_data_t spindle_data = {0};
+//static spindle_data_t spindle_data = {0};
 static spindle_id_t laser_id = -1;
 static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_get_data_ptr on_get_data = NULL;
 
 static bool pwmEnabled = false;
 static spindle_pwm_t laser_pwm;
+static float rpm_programmed;
 static void laser_set_speed (uint_fast16_t pwm_value);
 
 typedef union {
@@ -172,6 +174,8 @@ static void laserSetState (spindle_state_t state, float rpm)
     else {
         laser_on();
     }
+
+    laser_state.ccw = state.ccw;
 }
 
 // Returns spindle state in a spindle_state_t variable
@@ -180,9 +184,9 @@ static spindle_state_t laserGetState (void)
     spindle_state_t state = laser_state;
 
 #ifdef LASER_ENABLE_PIN
-    state.on = DIGITAL_IN(LASER_ENABLE_PORT, LASER_ENABLE_PIN);
+    state.on = DIGITAL_IN(LASER_ENABLE_PORT, LASER_ENABLE_PIN) ^ laser_pwm_settings.invert_flags.enable;
 #endif
-    state.value ^= settings.spindle.invert.mask;
+    //state. ^= laser_pwm_settings.invert_flags.value;
 
     return state;
 }
@@ -223,9 +227,10 @@ static void laserSetStateVariable (spindle_state_t state, float rpm)
             laser_off();
     }
 
+    laser_state.ccw = state.ccw;
+
     laser_set_speed(state.on ? spindle_compute_pwm_value(&laser_pwm, rpm, false) : laser_pwm.off_value);
-
-
+    rpm_programmed = rpm;
 }
 
 static bool laserConfig (spindle_ptrs_t *laser)
@@ -363,6 +368,30 @@ static void warning_msg (uint_fast16_t state)
     report_message("Laser PWM switch plugin failed to initialize!", Message_Warning);
 }
 
+#if 0
+static spindle_data_t *spindleGetData (spindle_data_request_t request)
+{
+
+        spindle_data_t *data = {0};
+        spindle_state_t state = laserGetState();
+
+        //data = on_get_data(request);
+        data->rpm_low_limit = laser_pwm_settings.rpm_min;
+        data->rpm_high_limit = laser_pwm_settings.rpm_max;
+        data->rpm_programmed = rpm_programmed;
+        data->rpm = rpm_programmed;
+        data->state_programmed.on = state.on;
+        data->state_programmed.ccw = state.ccw;
+
+        return data;
+}
+#endif
+
+static void laserUpdateRPM (float rpm)
+{
+    laser_set_speed(laser_state.on ? spindle_compute_pwm_value(&laser_pwm, rpm, false) : laser_pwm.off_value);
+}
+
 void pwm_switch_init (void)
 {
     //initialize and register the laser PWM spindle.
@@ -391,7 +420,8 @@ void pwm_switch_init (void)
         .type = SpindleType_Basic,
  #endif
         .set_state = laserSetState,
-        .get_state = laserGetState
+        .get_state = laserGetState,
+        .update_rpm = laserUpdateRPM
     };
 
     laser_id = spindle_register(&laser, "SLB_LASER");
