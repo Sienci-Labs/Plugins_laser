@@ -82,27 +82,27 @@ laser_settings_t laser_pwm_settings;
 static nvs_address_t nvs_address;
 
 static const setting_detail_t laser_settings[] = {
-     { Setting_Laser_RpmMax, Group_Spindle, "Maximum laser speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.rpm_max, NULL, NULL },
-     { Setting_Laser_RpmMin, Group_Spindle, "Minimum laser speed", "RPM", Format_Decimal, "#####0.000", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.rpm_min, NULL, NULL },
+     { Setting_Laser_RpmMax, Group_Spindle, "Maximum laser power",  NULL, Format_Decimal, "#####0.000", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.rpm_max, NULL, NULL },
+     { Setting_Laser_RpmMin, Group_Spindle, "Minimum laser power",  NULL, Format_Decimal, "#####0.000", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.rpm_min, NULL, NULL },
      { Setting_Laser_PWMFreq, Group_Spindle, "Laser PWM frequency", "Hz", Format_Decimal, "#####0", NULL, NULL, Setting_IsExtended, &laser_pwm_settings.pwm_freq, NULL, NULL },
      { Setting_Laser_PWMOffValue, Group_Spindle, "Laser PWM off value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_off_value, NULL, NULL },
      { Setting_Laser_PWMMinValue, Group_Spindle, "Laser PWM min value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_min_value, NULL, NULL },
      { Setting_Laser_PWMMaxValue, Group_Spindle, "Laser PWM max value", "percent", Format_Decimal, "##0.0", NULL, "100", Setting_IsExtended, &laser_pwm_settings.pwm_max_value, NULL, NULL },
-     { Setting_Laser_XOffset, Group_Spindle, "Laser X Offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_x_offset, NULL, NULL },
-     { Setting_Laser_YOffset, Group_Spindle, "Laser Y Offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_y_offset, NULL, NULL },
+     { Setting_Laser_XOffset, Group_Spindle, "Laser X offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_x_offset, NULL, NULL },
+     { Setting_Laser_YOffset, Group_Spindle, "Laser Y offset",  "mm", Format_Decimal, "-0.000", "-1000", "1000", Setting_IsExtended, &laser_pwm_settings.laser_y_offset, NULL, NULL },
      { Setting_LaserInvertMask, Group_Spindle, "Invert laser signals", NULL, Format_Bitfield, "Laser enable,Laser PWM", NULL, NULL, Setting_NonCore, &laser_pwm_settings.invert_flags, NULL, NULL, { .reboot_required = On } },          
 };
 
 static const setting_descr_t laser_settings_descr[] = {
-    { Setting_Laser_RpmMax, "Maximum S word speed for laser" },
-    { Setting_Laser_RpmMin, "Minimum S word speed for laser" },
-    { Setting_Laser_PWMFreq, "Laser PWM frequency" },
+    { Setting_Laser_RpmMax, "Maximum S word power for laser." },
+    { Setting_Laser_RpmMin, "Minimum S word power for laser." },
+    { Setting_Laser_PWMFreq, "Laser PWM frequency." },
     { Setting_Laser_PWMOffValue, "Laser PWM off value in percent (duty cycle)." },    
     { Setting_Laser_PWMMinValue, "Laser PWM min value in percent (duty cycle)." },
     { Setting_Laser_PWMMaxValue, "Laser PWM max value in percent (duty cycle)." }, 
-    { Setting_Laser_XOffset, "Laser offset from spindle on X axis." },
-    { Setting_Laser_YOffset, "Laser offset from spindle on X axis." }, 
-    { Setting_LaserInvertMask, "Inverts the laser enable and PWM signals (active low)." },        
+    { Setting_Laser_XOffset, "Laser offset from spindle in X-axis." },
+    { Setting_Laser_YOffset, "Laser offset from spindle in Y-axis." }, 
+    { Setting_LaserInvertMask, "Inverts the laser enable and PWM signals (active high)." },        
 };
 
 // Write settings to non volatile storage (NVS).
