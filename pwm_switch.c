@@ -115,7 +115,7 @@ static void laser_settings_save (void)
 static void laser_settings_restore (void)
 {
     laser_pwm_settings.pwm_freq = 1000;
-    laser_pwm_settings.pwm_max_value = 85;
+    laser_pwm_settings.pwm_max_value = 100;
     laser_pwm_settings.pwm_min_value = 0;
     laser_pwm_settings.pwm_off_value = 0;
     laser_pwm_settings.rpm_max = 255;
