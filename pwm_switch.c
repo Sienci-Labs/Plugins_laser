@@ -296,7 +296,9 @@ static bool laserConfig (spindle_ptrs_t *laser)
 
     } else {
         if(pwmEnabled)
-            laser->set_state((spindle_state_t){0}, 0.0f);
+            laser->set_state(laser, (spindle_state_t){0}, 0.0f);
+
+
 
         laser->set_state = laserSetState;
     }
